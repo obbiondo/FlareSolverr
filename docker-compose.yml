@@ -2,8 +2,7 @@
 version: "2.1"
 services:
   flaresolverr:
-    # DockerHub mirror flaresolverr/flaresolverr:latest
-    image: ghcr.io/flaresolverr/flaresolverr:latest
+    image: ghcr.io/obbiondo/flaresolverr:latest
     container_name: flaresolverr
     environment:
       - LOG_LEVEL=${LOG_LEVEL:-info}
@@ -11,8 +10,16 @@ services:
       - LOG_HTML=${LOG_HTML:-false}
       - CAPTCHA_SOLVER=${CAPTCHA_SOLVER:-none}
       - TZ=Europe/London
+      # Performance tuning for QNAP TS-251
+      - BROWSER_POOL_SIZE=${BROWSER_POOL_SIZE:-1}
+      - BROWSER_POOL_MAX_REQUESTS=${BROWSER_POOL_MAX_REQUESTS:-50}
+      - MAX_CONCURRENT_BROWSERS=${MAX_CONCURRENT_BROWSERS:-1}
+      - REQUEST_QUEUE_TIMEOUT=${REQUEST_QUEUE_TIMEOUT:-600}
+      - COOKIE_STORE_TTL=${COOKIE_STORE_TTL:-3600}
+      - MAX_SESSIONS=${MAX_SESSIONS:-3}
+      - SESSION_TTL_MINUTES=${SESSION_TTL_MINUTES:-30}
     ports:
       - "${PORT:-8191}:8191"
     volumes:
-      - /var/lib/flaresolver:/config
-    restart: unless-stopped
+      - /share/external/DEV3301_1/configs/flaresolver:/config
+    restart: always
