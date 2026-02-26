@@ -18,6 +18,7 @@ CHROME_MAJOR_VERSION = None
 USER_AGENT = None
 XVFB_DISPLAY = None
 PATCHED_DRIVER_PATH = None
+_SINGLE_PROCESS_WARNED = False
 
 
 def get_config_log_html() -> bool:
@@ -150,6 +151,24 @@ def get_webdriver(proxy: dict = None) -> WebDriver:
     options.add_argument('--ignore-certificate-errors')
     options.add_argument('--ignore-ssl-errors')
 
+    # Memory optimization for low-powered devices (configurable via env vars, set to 0 to disable)
+    max_old_space = os.environ.get('CHROME_MAX_OLD_SPACE_SIZE', '256')
+    if max_old_space and max_old_space != '0':
+        options.add_argument(f'--js-flags=--max-old-space-size={max_old_space}')
+    renderer_limit = os.environ.get('CHROME_RENDERER_PROCESS_LIMIT', '1')
+    if renderer_limit and renderer_limit != '0':
+        options.add_argument(f'--renderer-process-limit={renderer_limit}')
+    options.add_argument('--disable-background-networking')
+    options.add_argument('--disable-default-apps')
+    options.add_argument('--disable-sync')
+    options.add_argument('--disable-component-update')
+    if os.environ.get('CHROME_SINGLE_PROCESS', 'false').lower() == 'true':
+        global _SINGLE_PROCESS_WARNED
+        if not _SINGLE_PROCESS_WARNED:
+            logging.warning("CHROME_SINGLE_PROCESS enabled — may cause stability issues and detection risk")
+            _SINGLE_PROCESS_WARNED = True
+        options.add_argument('--single-process')
+
     language = os.environ.get('LANG', None)
     if language is not None:
         options.add_argument('--accept-lang=%s' % language)
@@ -203,16 +222,16 @@ def get_webdriver(proxy: dict = None) -> WebDriver:
         logging.error("Error starting Chrome: %s" % e)
         # No point in continuing if we cannot retrieve the driver
         raise e
+    finally:
+        # Clean up proxy extension directory even if Chrome creation fails
+        if proxy_extension_dir is not None:
+            shutil.rmtree(proxy_extension_dir, ignore_errors=True)
 
     # save the patched driver to avoid re-downloads
     if driver_exe_path is None:
         PATCHED_DRIVER_PATH = os.path.join(driver.patcher.data_path, driver.patcher.exe_name)
         if PATCHED_DRIVER_PATH != driver.patcher.executable_path:
             shutil.copy(driver.patcher.executable_path, PATCHED_DRIVER_PATH)
-
-    # clean up proxy extension directory
-    if proxy_extension_dir is not None:
-        shutil.rmtree(proxy_extension_dir)
 
     # selenium vanilla
     # options = webdriver.ChromeOptions()
@@ -317,8 +336,9 @@ def get_user_agent(driver=None) -> str:
     if USER_AGENT is not None:
         return USER_AGENT
 
+    created_driver = driver is None
     try:
-        if driver is None:
+        if created_driver:
             driver = get_webdriver()
         USER_AGENT = driver.execute_script("return navigator.userAgent")
         # Fix for Chrome 117 | https://github.com/FlareSolverr/FlareSolverr/issues/910
@@ -327,7 +347,7 @@ def get_user_agent(driver=None) -> str:
     except Exception as e:
         raise Exception("Error getting browser User-Agent. " + str(e))
     finally:
-        if driver is not None:
+        if created_driver and driver is not None:
             if PLATFORM_VERSION == "nt":
                 driver.close()
             driver.quit()

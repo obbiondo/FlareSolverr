@@ -1,7 +1,11 @@
+import atexit
 import json
 import logging
 import os
+import signal
 import sys
+import threading
+import time
 
 import certifi
 from bottle import run, response, Bottle, request, ServerAdapter
@@ -133,6 +137,67 @@ if __name__ == "__main__":
 
     # test browser installation
     flaresolverr_service.test_browser_installation()
+
+    # log performance optimization config
+    cookie_store_path = os.environ.get('COOKIE_STORE_PATH', '/config/cookie_store.db')
+    cookie_store_ttl = os.environ.get('COOKIE_STORE_TTL', '1800')
+    max_concurrent = os.environ.get('MAX_CONCURRENT_BROWSERS', '1')
+    queue_timeout = os.environ.get('REQUEST_QUEUE_TIMEOUT', '300')
+    pool_size = os.environ.get('BROWSER_POOL_SIZE', '1')
+    pool_max_req = os.environ.get('BROWSER_POOL_MAX_REQUESTS', '50')
+    chrome_single = os.environ.get('CHROME_SINGLE_PROCESS', 'false')
+    max_sessions = os.environ.get('MAX_SESSIONS', '10')
+    session_ttl = os.environ.get('SESSION_TTL_MINUTES', '30')
+    logging.info(f"Cookie store: path={cookie_store_path}, ttl={cookie_store_ttl}s")
+    logging.info(f"Request queue: max_concurrent={max_concurrent}, timeout={queue_timeout}s")
+    logging.info(f"Browser pool: size={pool_size}, max_requests={pool_max_req}")
+    logging.info(f"Chrome: single_process={chrome_single}")
+    logging.info(f"Sessions: max={max_sessions}, ttl={session_ttl}m")
+
+    # initialize browser pool (pre-warm Chrome instances)
+    flaresolverr_service.init_browser_pool()
+
+    # start session cleanup thread
+    flaresolverr_service.SESSIONS_STORAGE.start_cleanup_thread()
+
+    # start cookie store cleanup thread
+    cleanup_interval = int(os.environ.get('COOKIE_CLEANUP_INTERVAL', '3600'))
+
+    def _cookie_cleanup_loop():
+        while True:
+            time.sleep(cleanup_interval)
+            try:
+                flaresolverr_service.COOKIE_STORE.cleanup_expired()
+            except Exception as e:
+                logging.debug(f"Cookie cleanup error: {e}")
+
+    threading.Thread(target=_cookie_cleanup_loop, daemon=True, name="cookie-cleanup").start()
+    logging.info(f"Cookie store cleanup thread started (interval={cleanup_interval}s)")
+
+    # shutdown hooks — clean up Chrome processes on exit
+    _shutdown_state = {'called': False}
+
+    def _shutdown():
+        if _shutdown_state['called']:
+            return
+        _shutdown_state['called'] = True
+        logging.info("Shutting down...")
+        flaresolverr_service.SESSIONS_STORAGE.stop()
+        if flaresolverr_service.BROWSER_POOL:
+            flaresolverr_service.BROWSER_POOL.shutdown()
+        for sid in list(flaresolverr_service.SESSIONS_STORAGE.session_ids()):
+            try:
+                flaresolverr_service.SESSIONS_STORAGE.destroy(sid)
+            except Exception:
+                pass
+
+    def _signal_handler(signum, frame):
+        _shutdown()
+        sys.exit(0)
+
+    atexit.register(_shutdown)
+    signal.signal(signal.SIGTERM, _signal_handler)
+    signal.signal(signal.SIGINT, _signal_handler)
 
     # start bootle plugins
     # plugin order is important

@@ -1,0 +1,27 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(wc:*)",
+      "Bash(grep:*)",
+      "WebSearch",
+      "WebFetch(domain:roundproxies.com)",
+      "WebFetch(domain:blog.cloudflare.com)",
+      "WebFetch(domain:www.capsolver.com)",
+      "WebFetch(domain:developers.cloudflare.com)",
+      "Bash(cd /Users/andreabiondo/projects/FlareSolverr/src && python -m unittest tests.py -v 2>&1)",
+      "Bash(pip install:*)",
+      "Bash(pip3 install:*)",
+      "Bash(cd /Users/andreabiondo/projects/FlareSolverr/src && python3 -m unittest tests.py -v 2>&1)",
+      "Bash(uv sync:*)",
+      "Bash(ls:*)",
+      "Bash(uv pip:*)",
+      "Bash(tail:*)",
+      "Bash(cd /Users/andreabiondo/projects/FlareSolverr/src && /Users/andreabiondo/projects/FlareSolverr/.venv/bin/python -m unittest tests.py -v 2>&1)",
+      "Bash(cd /Users/andreabiondo/projects/FlareSolverr/src && /Users/andreabiondo/projects/FlareSolverr/.venv/bin/python -c \"\nimport flaresolverr\nfrom webtest import TestApp\napp = TestApp\\(flaresolverr.app\\)\ntry:\n    res = app.get\\('/', expect_errors=True\\)\n    print\\('Status:', res.status_code\\)\n    print\\('Body:', res.body[:500]\\)\nexcept Exception as e:\n    print\\('Error:', e\\)\n\" 2>&1)",
+      "Bash(/Users/andreabiondo/projects/FlareSolverr/.venv/bin/python:*)",
+      "Bash(cd:*)",
+      "Bash(python3:*)",
+      "Bash(python:*)"
+    ]
+  }
+}
